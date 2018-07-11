@@ -1,10 +1,13 @@
 # matching-engine
-matching engine in golang for crypto exchange
+A simple matching engine for crypto exchange in golang
+
+TODO
 ===
 TODO:
 * Types of order price and amount
-* Logging
-* Json
+* Logging and Json
 
+
+Reference
 ===
 inspired by https://github.com/bhomnick/bexchange
