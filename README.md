@@ -1,2 +1,10 @@
 # matching-engine
-matching engine for exchange like LMAX
+matching engine in golang for crypto exchange
+===
+TODO:
+* Types of order price and amount
+* Logging
+* Json
+
+===
+inspired by https://github.com/bhomnick/bexchange
