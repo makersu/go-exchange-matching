@@ -22,7 +22,7 @@ func NewTreeNode() *TreeNode {
 	}
 }
 
-//TODO: refactor for rename
+//TODO: need?
 func (node *TreeNode) upsert(order *Order) {
 	node.orders[order.id] = order
 }
@@ -37,14 +37,15 @@ func (n *TreeNode) String() string {
 }
 
 func printOrderbook(book *rbt.Tree) {
-	log.Debug("printOrderbook orderbook ", book)
 	log.Debug("printOrderbook book.Keys() ", book.Keys())
 
 	for _, k := range book.Keys() {
 		treeNode, _ := book.Get(k)
 		log.Debug("printOrderbook treeNode ", treeNode)
 	}
-	log.Debug("printOrderbook\n")
+	log.Debug("printOrderbook orderbook ", book)
+
+	// log.Debug("printOrderbook")
 
 }
 

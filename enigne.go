@@ -20,15 +20,17 @@ const (
 )
 
 type Engine struct {
-	pair ExchangePair
-	book *rbt.Tree
+	pair    ExchangePair
+	askbook *rbt.Tree
+	bidbook *rbt.Tree
 }
 
 // NewEngine is the Matching Engine constructor
 func NewEngine(pair ExchangePair) Engine {
 	return Engine{
-		pair: pair,
-		book: rbt.NewWithIntComparator(),
+		pair:    pair,
+		askbook: rbt.NewWithIntComparator(),
+		bidbook: rbt.NewWithIntComparator(),
 		// writeLog: NewWriteLog(exchange.String()),
 	}
 }
@@ -51,6 +53,14 @@ func addOrder(book *rbt.Tree, order *Order) {
 
 }
 
+func addAskOrder(sellbook *rbt.Tree, order *Order) {
+	addOrder(sellbook, order)
+}
+
+func addBidOrder(buybook *rbt.Tree, order *Order) {
+	addOrder(buybook, order)
+}
+
 //executeOrder walk the orderbook and match asks and bids that can fill
 // func (engine *Engine) executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
 func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
@@ -59,21 +69,22 @@ func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
 
 	// bid for lowest price
 	if executingOrder.operation == BID {
+		log.Debug("executeOrder BID")
 
-		it := engine.book.Iterator()
+		askbookit := engine.askbook.Iterator()
 
 		// get the begin node(lowest price) then next
-		for it.Begin(); it.Next(); {
-			nodePrice, node := it.Key().(int), it.Value().(*TreeNode)
+		for askbookit.Begin(); askbookit.Next(); {
+			nodePrice, node := askbookit.Key().(int), askbookit.Value().(*TreeNode)
 			log.Debug("executeOrder executingOrder price ", executingOrder.price, executingOrder) //
-			log.Debug("executeOrder BID book.Iterator()  ", nodePrice, node)                      //
+			log.Debug("executeOrder BID askbook.Iterator()  ", nodePrice, node)                   //
 
 			//Check price
 			if nodePrice <= executingOrder.price {
 
-				log.Debug("executeOrder BID book.Iterator() nodePrice <= executingOrder.price ", nodePrice, executingOrder.price) //
+				log.Debug("executeOrder BID askbook.Iterator() nodePrice <= executingOrder.price ", nodePrice, executingOrder.price) //
 				// nodeOrderResult, nodeFills := matchNode(node, ord)
-				_, nodeMatches := engine.matchNode(node, executingOrder)
+				_, nodeMatches := engine.matchNode(engine.askbook, node, executingOrder)
 
 				//TODO nodeMatch.Number = 0
 				for _, nodeMatch := range nodeMatches {
@@ -83,7 +94,7 @@ func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
 				}
 
 			} else {
-				log.Debug("executeOrder BID book.Iterator() nodePrice > executingOrder.price ", nodePrice, executingOrder.price) //
+				log.Debug("executeOrder BID askbook.Iterator() nodePrice > executingOrder.price ", nodePrice, executingOrder.price) //
 				//skip this node, too expensive (The cheapest ask could be higher than this bid)
 				// continue
 				break
@@ -98,12 +109,13 @@ func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
 		}
 		return executingOrder, matches
 	} else if executingOrder.operation == ASK {
+		log.Debug("executeOrder ASK")
 
-		it := engine.book.Iterator()
+		bidbookit := engine.bidbook.Iterator()
 
 		// get the end element(highest) then previous
-		for it.End(); it.Prev(); {
-			nodePrice, node := it.Key().(int), it.Value().(*TreeNode)
+		for bidbookit.End(); bidbookit.Prev(); {
+			nodePrice, node := bidbookit.Key().(int), bidbookit.Value().(*TreeNode)
 
 			log.Debug("executeOrder executingOrder price ", executingOrder.price, executingOrder) //
 			log.Debug("executeOrder ASK book.Iterator()  ", nodePrice, node)                      //
@@ -113,7 +125,7 @@ func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
 				log.Debug("executeOrder ASK book.Iterator() nodePrice >= executingOrder.price ", nodePrice, executingOrder.price) //
 
 				// nodeOrderResult, nodeFills := matchNode(node, ord)
-				_, nodeMatches := engine.matchNode(node, executingOrder)
+				_, nodeMatches := engine.matchNode(engine.bidbook, node, executingOrder)
 
 				log.Debug("executeOrder matchNode nodeMatches", nodeMatches)
 
@@ -155,7 +167,7 @@ func (engine *Engine) Run(order *Order) {
 		log.Debug("*Run ASK matches", matches)
 
 		if executedOrder.NumberOutstanding > 0 {
-			addOrder(engine.book, order)
+			addOrder(engine.askbook, order)
 		}
 
 	case BID:
@@ -166,7 +178,7 @@ func (engine *Engine) Run(order *Order) {
 		log.Debug("*Run BID matches", matches)
 
 		if executedOrder.NumberOutstanding > 0 {
-			addOrder(engine.book, order)
+			addBidOrder(engine.bidbook, order)
 		}
 
 	case CANCEL:
@@ -182,12 +194,15 @@ func (engine *Engine) Run(order *Order) {
 		fmt.Println("Invalid Order Type")
 	}
 	// }
-	printOrderbook(engine.book) //
+	// log.Debug("printOrderbook ASKbook")
+	// printOrderbook(engine.askbook) //
+	// log.Debug("printOrderbook BIDbook")
+	// printOrderbook(engine.bidbook) //
 
 }
 
 //matchNode takes an order and fills it against a node, NOT IDEMPOTENT
-func (engine *Engine) matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
+func (engine *Engine) matchNode(book *rbt.Tree, node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 
 	//TODO
 	//We only deal with ask and bid
@@ -195,64 +210,66 @@ func (engine *Engine) matchNode(node *TreeNode, matchingOrder *Order) (*Order, [
 		return matchingOrder, []Match{}
 	}
 
-	orders := node.sortedOrders()
+	// orders := node.sortedOrders()
+	orders := node.orders
 
 	activeOrder := matchingOrder //?
 	var matches []Match
 
 	for _, oldOrder := range orders {
-		if activeOrder.operation != oldOrder.operation {
+		// if activeOrder.operation != oldOrder.operation {
+		// log.Debug("matchNode activeOrder.operation != oldOrder.operation")
+		// If the current order can fill new order
+		if oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding {
+			log.Debug("matchNode oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding ", oldOrder.NumberOutstanding, matchingOrder.NumberOutstanding)
+			partialFill := []*Order{activeOrder, oldOrder}
+			closed := []*Order{activeOrder}
 
-			// If the current order can fill new order
-			if oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding {
-				log.Debug("matchNode oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding ", oldOrder.NumberOutstanding, matchingOrder.NumberOutstanding)
-				partialFill := []*Order{activeOrder, oldOrder}
-				closed := []*Order{activeOrder}
-
-				if oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding == 0 {
-					closed = append(closed, oldOrder)
-					// node.delete(oldOrder.id)
-					engine.removeOrder(node, oldOrder)
-					nodeMatch := NewMatch(activeOrder.pair, activeOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
-
-					//Order is filled
-					activeOrder.NumberOutstanding = 0
-					matches = append(matches, nodeMatch)
-
-				} else { // Update old order
-					log.Debug("matchNode oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding != 0")
-
-					oldRemaining := oldOrder.NumberOutstanding - activeOrder.NumberOutstanding
-					oldOrder.NumberOutstanding = oldRemaining
-
-					nodeMatch := NewMatch(activeOrder.pair, activeOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
-
-					//Order is matched
-					activeOrder.NumberOutstanding = 0
-					matches = append(matches, nodeMatch)
-
-					node.upsert(oldOrder)
-				}
-
-			} else { // If the current order is too small to fill the new order
-
-				log.Debug("matchNode oldOrder.NumberOutstanding < matchingOrder.NumberOutstanding")
-
+			if oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding == 0 {
+				log.Debug("matchNode oldOrder.NumberOutstanding - matchingOrder.NumberOutstanding == 0")
+				closed = append(closed, oldOrder)
 				// node.delete(oldOrder.id)
-				engine.removeOrder(node, oldOrder)
+				engine.removeOrder(book, node, oldOrder)
+				nodeMatch := NewMatch(activeOrder.pair, activeOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
 
-				partialFill := []*Order{activeOrder, oldOrder}
-				closed := []*Order{oldOrder}
-				nodeMatch := NewMatch(activeOrder.pair, oldOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
-
-				activeOrder.NumberOutstanding = activeOrder.NumberOutstanding - oldOrder.NumberOutstanding
+				//Order is filled
+				activeOrder.NumberOutstanding = 0
 				matches = append(matches, nodeMatch)
 
+			} else { // Update old order
+				log.Debug("matchNode oldOrder.NumberOutstanding - matchingOrder.NumberOutstanding != 0")
+
+				oldRemaining := oldOrder.NumberOutstanding - activeOrder.NumberOutstanding
+				oldOrder.NumberOutstanding = oldRemaining
+
+				nodeMatch := NewMatch(activeOrder.pair, activeOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
+
+				//Order is matched
+				activeOrder.NumberOutstanding = 0
+				matches = append(matches, nodeMatch)
+
+				node.upsert(oldOrder)
 			}
 
-		} else {
-			log.Debug("matchNode activeOrder.operation == oldOrder.operation")
+		} else { // If the current order is too small to fill the new order
+
+			log.Debug("matchNode oldOrder.NumberOutstanding < matchingOrder.NumberOutstanding")
+
+			// node.delete(oldOrder.id)
+			engine.removeOrder(book, node, oldOrder)
+
+			partialFill := []*Order{activeOrder, oldOrder}
+			closed := []*Order{oldOrder}
+			nodeMatch := NewMatch(activeOrder.pair, oldOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
+
+			activeOrder.NumberOutstanding = activeOrder.NumberOutstanding - oldOrder.NumberOutstanding
+			matches = append(matches, nodeMatch)
+
 		}
+
+		// } else {
+		// 	log.Debug("matchNode activeOrder.operation == oldOrder.operation")
+		// }
 	}
 
 	return activeOrder, matches
@@ -261,6 +278,7 @@ func (engine *Engine) matchNode(node *TreeNode, matchingOrder *Order) (*Order, [
 //TODO: linked list?
 //TODO: sort after add?
 func (n TreeNode) sortedOrders() []*Order {
+	log.Debug("sortedOrders")
 	orders := make([]*Order, 0)
 	for _, v := range n.orders {
 		orders = append(orders, v)
@@ -274,11 +292,11 @@ func (n TreeNode) sortedOrders() []*Order {
 }
 
 // func (n *TreeNode) delete(id uint64) {
-func (engine *Engine) removeOrder(n *TreeNode, order *Order) {
+func (engine *Engine) removeOrder(book *rbt.Tree, n *TreeNode, order *Order) {
 	delete(n.orders, order.id)
 	if len(n.orders) == 0 {
 		// myPrintln("len(n.orders)==0", n)
-		engine.book.Remove(order.price)
+		book.Remove(order.price)
 	}
 
 }

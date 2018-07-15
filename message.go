@@ -2,8 +2,6 @@ package engine
 
 import (
 	"time"
-
-	uuid "github.com/nu7hatch/gouuid"
 )
 
 type Match struct {
@@ -18,10 +16,11 @@ type Match struct {
 }
 
 func NewMatch(pair ExchangePair, num uint32, price int, part []*Order, closed []*Order) Match {
-	uid, _ := uuid.NewV4()
+	// uid, _ := uuid.NewV4()
 
 	return Match{
-		ID:           uid.String(),
+		// ID:           uid.String(),
+		ID:           string(time.Now().Nanosecond()),
 		pair:         pair,
 		Number:       num,
 		Price:        price,

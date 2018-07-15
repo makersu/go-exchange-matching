@@ -1,9 +1,14 @@
 package engine
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
+	"os"
+	"runtime"
+	"runtime/pprof"
 	"testing"
 	"time"
 )
@@ -55,7 +60,7 @@ func doPerfTest(n int, priceMean, priceStd float64, maxAmount int32) {
 
 	elapsed := time.Since(start)
 
-	fmt.Printf("Handled %v actions in %v at %v n/second.\n", n, elapsed, int(float64(n)/elapsed.Seconds()))
+	fmt.Printf("Handled %v orders in %v at %v orders/second.\n", n, elapsed, int(float64(n)/elapsed.Seconds()))
 
 	// printResult(&engine)
 	// printOrderbook(engine.book) //
@@ -78,8 +83,37 @@ func doPerfTest(n int, priceMean, priceStd float64, maxAmount int32) {
 
 // }
 
+func init() {
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+	var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// ... rest of the program ...
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+		f.Close()
+	}
+}
 func TestPerf(t *testing.T) {
-	doPerfTest(100, 5000, 10, 50)
+
 	// doPerfTest(10000, 5000, 10, 50)
 	// doPerfTest(10000, 5000, 1000, 5000)
 	// doPerfTest(100000, 5000, 10, 50)
@@ -87,6 +121,9 @@ func TestPerf(t *testing.T) {
 	// doPerfTest(1000000, 5000, 10, 50)
 	// doPerfTest(1000000, 5000, 1000, 5000)
 
+	// doPerfTest(100, 5000, 10, 50)
+	// doPerfTest(1000, 5000, 10, 50)
+	// doPerfTest(10000, 5000, 10, 50)
 	// doPerfTest(100000, 5000, 10, 50)
 	// doPerfTest(200000, 5000, 10, 50)
 	// doPerfTest(300000, 5000, 10, 50)
@@ -97,4 +134,17 @@ func TestPerf(t *testing.T) {
 	// doPerfTest(800000, 5000, 10, 50)
 	// doPerfTest(900000, 5000, 10, 50)
 	// doPerfTest(1000000, 5000, 10, 50)
+
+	// doPerfTest(1000, 5000, 1000, 5000)
+	// doPerfTest(100000, 5000, 1000, 5000)
+	// doPerfTest(200000, 5000, 1000, 5000)
+	// doPerfTest(300000, 5000, 1000, 5000)
+	// doPerfTest(400000, 5000, 1000, 5000)
+	// doPerfTest(500000, 5000, 1000, 5000)
+	// doPerfTest(600000, 5000, 1000, 5000)
+	// doPerfTest(700000, 5000, 1000, 5000)
+	// doPerfTest(800000, 5000, 1000, 5000)
+	// doPerfTest(900000, 5000, 1000, 5000)
+	// doPerfTest(1000000, 5000, 1000, 5000)
+
 }

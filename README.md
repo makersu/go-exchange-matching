@@ -4,11 +4,17 @@ A simple matching engine for crypto exchange in golang
 TODO
 ===
 TODO:
-* Types of order price and amount
+* price and amount units
 * Cancel order
 * Market price
 * Logging and Json
 
+Profilling
+===
+> go test -cpuprofile cpu.prof -memprofile mem.prof -bench .
+> go tool pprof cpu.prof
+(pprof) pdf
+(pprof) list go
 
 Reference
 ===
