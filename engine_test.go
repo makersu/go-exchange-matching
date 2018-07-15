@@ -55,7 +55,7 @@ func doPerfTest(n int, priceMean, priceStd float64, maxAmount int32) {
 
 	elapsed := time.Since(start)
 
-	fmt.Printf("\n\nHandled %v actions in %v at %v n/second.\n", n, elapsed, int(float64(n)/elapsed.Seconds()))
+	fmt.Printf("Handled %v actions in %v at %v n/second.\n", n, elapsed, int(float64(n)/elapsed.Seconds()))
 
 	// printResult(&engine)
 	// printOrderbook(engine.book) //
@@ -79,10 +79,22 @@ func doPerfTest(n int, priceMean, priceStd float64, maxAmount int32) {
 // }
 
 func TestPerf(t *testing.T) {
-	doPerfTest(10, 5000, 10, 50)
+	doPerfTest(100, 5000, 10, 50)
+	// doPerfTest(10000, 5000, 10, 50)
 	// doPerfTest(10000, 5000, 1000, 5000)
 	// doPerfTest(100000, 5000, 10, 50)
 	// doPerfTest(100000, 5000, 1000, 5000)
 	// doPerfTest(1000000, 5000, 10, 50)
 	// doPerfTest(1000000, 5000, 1000, 5000)
+
+	// doPerfTest(100000, 5000, 10, 50)
+	// doPerfTest(200000, 5000, 10, 50)
+	// doPerfTest(300000, 5000, 10, 50)
+	// doPerfTest(400000, 5000, 10, 50)
+	// doPerfTest(500000, 5000, 10, 50)
+	// doPerfTest(600000, 5000, 10, 50)
+	// doPerfTest(700000, 5000, 10, 50)
+	// doPerfTest(800000, 5000, 10, 50)
+	// doPerfTest(900000, 5000, 10, 50)
+	// doPerfTest(1000000, 5000, 10, 50)
 }

@@ -5,6 +5,8 @@ TODO
 ===
 TODO:
 * Types of order price and amount
+* Cancel order
+* Market price
 * Logging and Json
 
 

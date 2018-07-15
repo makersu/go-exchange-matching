@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	log "github.com/sirupsen/logrus"
+
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
 )
 
@@ -50,36 +52,30 @@ func addOrder(book *rbt.Tree, order *Order) {
 }
 
 //executeOrder walk the orderbook and match asks and bids that can fill
-func executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
-	// myPrintln(">>executeOrder executingOrder price", executingOrder.price, executingOrder) //
+// func (engine *Engine) executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
+func (engine *Engine) executeOrder(executingOrder *Order) (*Order, []Match) {
 
 	var matches []Match
 
+	// bid for lowest price
 	if executingOrder.operation == BID {
 
-		// start left
-		it := book.Iterator()
+		it := engine.book.Iterator()
 
-		// get the begin node then next
+		// get the begin node(lowest price) then next
 		for it.Begin(); it.Next(); {
 			nodePrice, node := it.Key().(int), it.Value().(*TreeNode)
-			myPrintln(">>executeOrder executingOrder price", executingOrder.price, executingOrder) //
-			myPrintln(">>executeOrder BID book.Iterator() ", nodePrice, node)                      //
+			log.Debug("executeOrder executingOrder price ", executingOrder.price, executingOrder) //
+			log.Debug("executeOrder BID book.Iterator()  ", nodePrice, node)                      //
 
 			//Check price
 			if nodePrice <= executingOrder.price {
-				// Have to append to top level variable but am dealing with scoped binding as well :=,
-				// so it takes an extra line
 
-				myPrintln(">>executeOrder BID book.Iterator() nodePrice <= executingOrder.price", nodePrice, executingOrder.price) //
+				log.Debug("executeOrder BID book.Iterator() nodePrice <= executingOrder.price ", nodePrice, executingOrder.price) //
+				// nodeOrderResult, nodeFills := matchNode(node, ord)
+				_, nodeMatches := engine.matchNode(node, executingOrder)
 
-				_, nodeMatches := matchNode(node, executingOrder)
-				// myPrintln(">>executeOrder matchNode executingOrderResult.NumberOutstanding", executingOrderResult.NumberOutstanding, executingOrderResult)
-				// myPrintln(">>executeOrder matchNode matches", nodeMatches)
-
-				// myPrintln(">>executeOrder matchNode matches", nodeMatches)
-
-				// ord = nodeOrderResult //??
+				//TODO nodeMatch.Number = 0
 				for _, nodeMatch := range nodeMatches {
 					if nodeMatch.Number > 0 {
 						matches = append(matches, nodeMatch)
@@ -87,8 +83,11 @@ func executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
 				}
 
 			} else {
+				log.Debug("executeOrder BID book.Iterator() nodePrice > executingOrder.price ", nodePrice, executingOrder.price) //
 				//skip this node, too expensive (The cheapest ask could be higher than this bid)
-				continue
+				// continue
+				break
+
 			}
 
 			if executingOrder.NumberOutstanding == 0 {
@@ -99,38 +98,37 @@ func executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
 		}
 		return executingOrder, matches
 	} else if executingOrder.operation == ASK {
-		// fmt.Println("executeOrder ASK matchingOrder.Price", matchingOrder.price) //
 
-		// start left?
-		it := book.Iterator()
+		it := engine.book.Iterator()
 
 		// get the end element(highest) then previous
 		for it.End(); it.Prev(); {
 			nodePrice, node := it.Key().(int), it.Value().(*TreeNode)
 
-			myPrintln(">>executeOrder executingOrder price", executingOrder.price, executingOrder) //
-			myPrintln(">>executeOrder ASK book.Iterator() ", nodePrice, node)                      //
+			log.Debug("executeOrder executingOrder price ", executingOrder.price, executingOrder) //
+			log.Debug("executeOrder ASK book.Iterator()  ", nodePrice, node)                      //
 
 			//Check price to sell high?
 			if nodePrice >= executingOrder.price {
-				myPrintln(">>executeOrder ASK book.Iterator() nodePrice >= executingOrder.price", nodePrice, executingOrder.price) //
+				log.Debug("executeOrder ASK book.Iterator() nodePrice >= executingOrder.price ", nodePrice, executingOrder.price) //
 
 				// nodeOrderResult, nodeFills := matchNode(node, ord)
-				_, nodeMatches := matchNode(node, executingOrder)
-				// myPrintln(">>executeOrder matchNode executingOrderResult.NumberOutstanding", executingOrderResult.NumberOutstanding, executingOrderResult)
-				myPrintln(">>executeOrder matchNode matches", nodeMatches)
+				_, nodeMatches := engine.matchNode(node, executingOrder)
 
-				// ord = nodeOrderResult
-				for _, fill := range nodeMatches {
-					if fill.Number > 0 {
-						matches = append(matches, fill)
+				log.Debug("executeOrder matchNode nodeMatches", nodeMatches)
+
+				//TODO nodeMatch.Number = 0
+				for _, nodeMatche := range nodeMatches {
+					if nodeMatche.Number > 0 {
+						matches = append(matches, nodeMatche)
 					}
 				}
 
 			} else {
-				myPrintln(">>executeOrder ASK book.Iterator() nodePrice < executingOrder.price", nodePrice, executingOrder.price) //
+				log.Debug("executeOrder ASK book.Iterator() nodePrice < executingOrder.price ", nodePrice, executingOrder.price) //
 				//skip this node, too expensive (The cheapest ask could be higher than this bid)
-				continue
+				// continue
+				break
 			}
 
 			if executingOrder.NumberOutstanding == 0 {
@@ -147,59 +145,30 @@ func executeOrder(book *rbt.Tree, executingOrder *Order) (*Order, []Match) {
 	return &Order{}, nil
 }
 
-// func (d *BookManager) Run(in <-chan Order, out chan<- Fill) {
 func (engine *Engine) Run(order *Order) {
-	// for order := range in {
 	switch order.operation {
 	case ASK:
-		myPrintln("\n>*Run ASK for Higher price", order.price, order)
+		log.Debug("*Run ASK for Highest price ", order.price, order)
 
-		//Ask things
-		executedOrder, fills := executeOrder(engine.book, order)
-		// myPrintln("Run ASK executedOrder", executedOrder)
-		myPrintln(">Run ASK fills", fills)
+		// Ask Operations
+		executedOrder, matches := engine.executeOrder(order)
+		log.Debug("*Run ASK matches", matches)
 
 		if executedOrder.NumberOutstanding > 0 {
 			addOrder(engine.book, order)
 		}
-
-		// fmt.Println("ASK fill", fills)
-		// //Write to WAL
-		// d.writeLog.logFills(fills)
-		// //Send fills to message bus
-		// for _, fill := range fills {
-		// 	out <- fill
-		// }
-
-		//
-		// printOrderbook(engine.book) //
 
 	case BID:
-		myPrintln("\n*Run BID for Lower price", order.price, order)
+		log.Debug("*Run BID for Lowest price ", order.price, order)
 
 		// Bid Operations
-		executedOrder, matches := executeOrder(engine.book, order)
-		// myPrintln("\nRun BID executedOrder", executedOrder)
-		for _, fill := range matches {
-			// if fill.Number > 0 {
-			myPrintln("\nRun BID matches", fill)
-			// }
-		}
+		executedOrder, matches := engine.executeOrder(order)
+		log.Debug("*Run BID matches", matches)
 
 		if executedOrder.NumberOutstanding > 0 {
 			addOrder(engine.book, order)
 		}
 
-		// fmt.Println("BID fill", fills)
-		//Write to WAL
-		// d.writeLog.logFills(fills)
-		//Send fills to message bus
-		// for _, fill := range fills {
-		// 	out <- fill
-		// }
-
-		//
-		// printOrderbook(engine.book) //
 	case CANCEL:
 		//Cancel an order
 		// fill := cancelOrder(d.book, order.ID)
@@ -213,13 +182,12 @@ func (engine *Engine) Run(order *Order) {
 		fmt.Println("Invalid Order Type")
 	}
 	// }
-	// printOrderbook(engine.book) //
+	printOrderbook(engine.book) //
 
 }
 
 //matchNode takes an order and fills it against a node, NOT IDEMPOTENT
-func matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
-	// myPrintln("===>matchNode matchingOrder", ord.price, ord)
+func (engine *Engine) matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 
 	//TODO
 	//We only deal with ask and bid
@@ -227,29 +195,24 @@ func matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 		return matchingOrder, []Match{}
 	}
 
-	// fmt.Println("===>matchNode node.orders", node.orders)
 	orders := node.sortedOrders()
-	// fmt.Println("===>matchNode node.sortedOrders ", orders)
 
 	activeOrder := matchingOrder //?
 	var matches []Match
 
 	for _, oldOrder := range orders {
 		if activeOrder.operation != oldOrder.operation {
-			// myPrintln("===>matchNode matchingOrder.operation != oldOrder.operation")
-			// myPrintln("===>matchNode matchingOrder.NumberOutstanding", matchingOrder.NumberOutstanding, matchingOrder)
-			// myPrintln("===>matchNode oldOrder.NumberOutstanding     ", oldOrder.NumberOutstanding, oldOrder)
 
 			// If the current order can fill new order
 			if oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding {
-				myPrintln("===>oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding", oldOrder.NumberOutstanding, matchingOrder.NumberOutstanding)
+				log.Debug("matchNode oldOrder.NumberOutstanding >= matchingOrder.NumberOutstanding ", oldOrder.NumberOutstanding, matchingOrder.NumberOutstanding)
 				partialFill := []*Order{activeOrder, oldOrder}
 				closed := []*Order{activeOrder}
 
-				if oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding == 0 { //??
-					// myPrintln("===>oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding == 0")
+				if oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding == 0 {
 					closed = append(closed, oldOrder)
-					node.delete(oldOrder.id)
+					// node.delete(oldOrder.id)
+					engine.removeOrder(node, oldOrder)
 					nodeMatch := NewMatch(activeOrder.pair, activeOrder.NumberOutstanding, oldOrder.price, partialFill, closed)
 
 					//Order is filled
@@ -257,7 +220,7 @@ func matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 					matches = append(matches, nodeMatch)
 
 				} else { // Update old order
-					myPrintln("===>oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding != 0")
+					log.Debug("matchNode oldOrder.NumberOutstanding-matchingOrder.NumberOutstanding != 0")
 
 					oldRemaining := oldOrder.NumberOutstanding - activeOrder.NumberOutstanding
 					oldOrder.NumberOutstanding = oldRemaining
@@ -272,9 +235,11 @@ func matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 				}
 
 			} else { // If the current order is too small to fill the new order
-				myPrintln("===>oldOrder.NumberOutstanding < matchingOrder.NumberOutstanding", oldOrder.NumberOutstanding, matchingOrder.NumberOutstanding)
-				// //How do we delete the old order?
-				node.delete(oldOrder.id)
+
+				log.Debug("matchNode oldOrder.NumberOutstanding < matchingOrder.NumberOutstanding")
+
+				// node.delete(oldOrder.id)
+				engine.removeOrder(node, oldOrder)
 
 				partialFill := []*Order{activeOrder, oldOrder}
 				closed := []*Order{oldOrder}
@@ -285,12 +250,16 @@ func matchNode(node *TreeNode, matchingOrder *Order) (*Order, []Match) {
 
 			}
 
+		} else {
+			log.Debug("matchNode activeOrder.operation == oldOrder.operation")
 		}
 	}
 
 	return activeOrder, matches
 }
 
+//TODO: linked list?
+//TODO: sort after add?
 func (n TreeNode) sortedOrders() []*Order {
 	orders := make([]*Order, 0)
 	for _, v := range n.orders {
@@ -304,11 +273,24 @@ func (n TreeNode) sortedOrders() []*Order {
 	return orders
 }
 
-// func (n *TreeNode) delete(id uuid.UUID) {
-func (n *TreeNode) delete(id uint64) {
-	delete(n.orders, id)
+// func (n *TreeNode) delete(id uint64) {
+func (engine *Engine) removeOrder(n *TreeNode, order *Order) {
+	delete(n.orders, order.id)
 	if len(n.orders) == 0 {
-		myPrintln("len(n.orders)==0", n)
+		// myPrintln("len(n.orders)==0", n)
+		engine.book.Remove(order.price)
 	}
-	//if(n.orders)
+
+}
+
+func init() {
+	// log.SetFormatter(&log.JSONFormatter{})
+	// log.SetFormatter(&log.TextFormatter{})
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat: "2006/01/02 - 15:04:05",
+		FullTimestamp:   true,
+	})
+
+	log.SetLevel(log.InfoLevel)
+
 }
