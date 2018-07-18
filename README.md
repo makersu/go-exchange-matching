@@ -8,13 +8,17 @@ TODO:
 * Cancel order
 * Market price
 * Logging and Json
+* Redis
+* Docker
 
 Profilling
 ===
+```
 > go test -cpuprofile cpu.prof -memprofile mem.prof -bench .
 > go tool pprof cpu.prof
 (pprof) pdf
 (pprof) list go
+```
 
 Reference
 ===
